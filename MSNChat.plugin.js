@@ -127,7 +127,7 @@ module.exports = class BasicPlugin {
 
     var displayableMemberCount = 0;
 
-    var memberList = document.querySelector('div[aria-label="Members"]');
+    var memberList = document.querySelector('aside[class^="membersWrap_"] > * > div[aria-label="Members"]');
     if (!memberList) return;
 
     var header;
@@ -171,7 +171,7 @@ module.exports = class BasicPlugin {
       }
       #channels {
         background-color: #f1f0eb;
-        margin: 0px;
+        margin-bottom: 40px;
       }
 
       [class*="messageContent"] {
@@ -180,6 +180,10 @@ module.exports = class BasicPlugin {
       div[aria-label="Members"] {
         background-color: #ffffff !important;
       }
+      ul[aria-label="Channels"] > :first-child {
+        height: 0px !important;
+      }
+
       div[class*="message"] span[class*="username"] {
         color: #000080 !important;
       }
@@ -320,17 +324,18 @@ module.exports = class BasicPlugin {
         background: none;
       }
 
-      section[aria-label="More Message Options"] {
-        background-color: red;
-      }
-
-      [class^="buttons"] svg, [aria-label="More message options"] svg {
+      form svg {
         color: #4a659c;
         transition: color 0.3s;
       }
 
-      [class^="buttons"] svg:hover, [aria-label="More message options"] svg:hover {
+      form svg:hover {
         color: #6699ff;
+      }
+
+      [class^="overflow_"] {
+        color: #000080;
+        font-weight: bold;
       }
 
     `;
