@@ -283,9 +283,9 @@ module.exports = class BasicPlugin {
       const SelectedChannelStore = BdApi.Webpack.getStore("SelectedChannelStore");
       const UserStore = BdApi.Webpack.getModule(m => m.getUser && m.getCurrentUser);
       const MessageActions = BdApi.Webpack.getModule(m => m.receiveMessage && m.sendMessage);
-      
+      const ChannelStore = BdApi.Webpack.getStore("ChannelStore");
       const currentChannelId = SelectedChannelStore.getChannelId();
-
+      const currentChannel = ChannelStore.getChannel(currentChannelId);
       const SelectedGuildStore = BdApi.Webpack.getModule(m => m.getLastSelectedGuildId);
       const guildId = SelectedGuildStore?.getLastSelectedGuildId();
 
@@ -329,22 +329,24 @@ module.exports = class BasicPlugin {
         console.log(`${displayName} : old: ${previousStatus}, new: ${update.status}`);
 
         if (message) {
-          const customMessage = {
-            id: Date.now().toString(),
-            type: 0,
-            content: message,
-            channel_id: currentChannelId,
-            author: {
-              id: 1234,
-              username: "You",
-              discriminator: "0000",
-              avatar: null,
-              bot: false,
-            },
-            timestamp: new Date().toISOString(),
-            state: "SENT"
-          };
-          MessageActions.receiveMessage(currentChannelId, customMessage);
+          if (currentChannel.type == 0) {
+            const customMessage = {
+              id: Date.now().toString(),
+              type: 0,
+              content: message,
+              channel_id: currentChannelId,
+              author: {
+                id: 1234,
+                username: "You",
+                discriminator: "0000",
+                avatar: null,
+                bot: false,
+              },
+              timestamp: new Date().toISOString(),
+              state: "SENT"
+            };
+            MessageActions.receiveMessage(currentChannelId, customMessage);
+          }
         }
       }
     } catch (error) {
