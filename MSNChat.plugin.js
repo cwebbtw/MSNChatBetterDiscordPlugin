@@ -16,6 +16,7 @@ module.exports = class BasicPlugin {
   constructor() {
     this._lastOnlineCount = null;
     this._lastOnlineCountTime = 0;
+    this.userStatus = {};
   }
 
   getChannelName() {
@@ -105,6 +106,7 @@ module.exports = class BasicPlugin {
     const SelectedChannelStore = BdApi.Webpack.getStore("SelectedChannelStore");
     const ChannelStore = BdApi.Webpack.getStore("ChannelStore");
     const GuildStore = BdApi.Webpack.getModule(m => m.getGuild && m.getGuilds);
+    const UserStore = BdApi.Webpack.getModule(m => m.getUser && m.getCurrentUser);
     
     const currentChannelId = SelectedChannelStore.getChannelId();
     const currentChannel = ChannelStore.getChannel(currentChannelId);
@@ -118,7 +120,9 @@ module.exports = class BasicPlugin {
 
     for (const memberId in allMembers) {
 
-      const status = PresenceStore.getStatus(allMembers[memberId].userId);
+      const status = this.userStatus[allMembers[memberId].userId] ?? PresenceStore.getStatus(allMembers[memberId].userId);
+
+      this.userStatus[allMembers[memberId].userId] = status;
 
       if (["online", "idle", "dnd", "unknown"].includes(status)) {
         const canView = this.hasViewChannelPermission(RolesStore, allMembers[memberId], guild, currentChannel);
@@ -272,12 +276,90 @@ module.exports = class BasicPlugin {
     this.createChannelNameheader(memberList, channelName);
   }
 
+
+  onPresenceUpdate(event) {
+    try {
+      const GuildMemberStore = BdApi.Webpack.getModule(m => m.getMember && m.getMembers);
+      const SelectedChannelStore = BdApi.Webpack.getStore("SelectedChannelStore");
+      const UserStore = BdApi.Webpack.getModule(m => m.getUser && m.getCurrentUser);
+      const MessageActions = BdApi.Webpack.getModule(m => m.receiveMessage && m.sendMessage);
+      
+      const currentChannelId = SelectedChannelStore.getChannelId();
+
+      const SelectedGuildStore = BdApi.Webpack.getModule(m => m.getLastSelectedGuildId);
+      const guildId = SelectedGuildStore?.getLastSelectedGuildId();
+
+      var update = event.updates[0];
+      if (update.guildId === guildId) {
+        const member = GuildMemberStore.getMember(guildId, update.user.id);
+        const user = UserStore.getUser(update.user.id);
+
+        const displayName =
+          member?.nick ||
+          user?.globalName ||
+          user?.username ||
+          "Unknown";
+
+        const self = UserStore.getCurrentUser();
+
+        const previousStatus = this.userStatus[update.user.id];
+
+        this.userStatus[update.user.id] = update.status;
+
+        let message = undefined;
+        if (previousStatus === "idle" && update.status === "online") {
+          if (update.user.id === self.id) {
+            message = `You have returned.`
+          } else {
+            message = `${displayName} has returned.`
+          }
+        } else if (previousStatus === "online" && update.status === "idle") {
+
+          if (update.user.id === self.id) {
+            message = `You are away.`
+          } else {
+            message = `${displayName} is away.`
+          }
+        } else if (["offline", undefined].includes(previousStatus) && ["idle", "online"].includes(previousStatus)) {
+          message = `${displayName} has joined the conversation.`
+        } else if (["idle", "online"].includes(previousStatus) && ["offline", undefined].includes(previousStatus)) {
+          message = `${displayName} has left the conversation.`
+        }
+
+        console.log(`${displayName} : old: ${previousStatus}, new: ${update.status}`);
+
+        if (message) {
+          const customMessage = {
+            id: Date.now().toString(),
+            type: 0,
+            content: message,
+            channel_id: currentChannelId,
+            author: {
+              id: 1234,
+              username: "You",
+              discriminator: "0000",
+              avatar: null,
+              bot: false,
+            },
+            timestamp: new Date().toISOString(),
+            state: "SENT"
+          };
+          MessageActions.receiveMessage(currentChannelId, customMessage);
+        }
+      }
+    } catch (error) {
+      console.error("An error occurred:", error);
+    }
+  }
+
   start() {
+    const Dispatcher = BdApi.Webpack.getModule(m => 
+      typeof m?.subscribe === "function" && 
+      typeof m?.dispatch === "function"
+    );
 
-    this.getOnlineCount();
-
-    this.userStatus = {};
-    this.channelCount = {};
+    this.boundPresenceUpdate = this.onPresenceUpdate.bind(this);
+    Dispatcher.subscribe("PRESENCE_UPDATES", this.boundPresenceUpdate);
 
     const css = `
       [class*="chatContent"],
@@ -457,6 +539,43 @@ module.exports = class BasicPlugin {
         font-weight: bold;
       }
 
+      div[data-author-id="1234"], div[data-author-id="1234"] * {
+        display: flex;
+        font-size: 14px;
+        font-family: Tahoma;
+        color: #808080 !important;
+        align-items: center;
+        padding: 0px;
+        padding-bottom: 0px;
+        margin-top: 0px;
+        padding-top: 0px;
+        height: 20px !important;
+        min-height: 20px !important;
+      }
+
+      div[data-author-id="1234"][class*="groupStart__"] {
+        padding-top: 15px !important;
+      }
+
+      div[data-author-id="1234"]::before {
+        content: "▶";
+        color: #808080;
+        font-size: 11px;
+        padding-bottom: 2px;
+        margin-right: 4px;
+      }
+
+      div[data-author-id="1234"] span[class*="headerText_"] {
+        display: none !important;
+      }
+
+      div[data-author-id="1234"] h3[class*="header_"] {
+        display: none !important;
+      }
+
+      div[data-author-id="1234"] [class*="avatar"] {
+        display: none !important;
+      }
     `;
     this.styleElement = document.createElement('style');
     this.styleElement.id = MSN_CHAT_ROOT_STYLE;
@@ -474,6 +593,13 @@ module.exports = class BasicPlugin {
   stop() {
 
     console.log('MSN Chat plugin stopping');
+
+    const Dispatcher = BdApi.Webpack.getModule(m => 
+      typeof m?.subscribe === "function" && 
+      typeof m?.dispatch === "function"
+    );
+
+    Dispatcher.unsubscribe("PRESENCE_UPDATES", this.boundPresenceUpdate);
 
     this.observer.disconnect();
 
