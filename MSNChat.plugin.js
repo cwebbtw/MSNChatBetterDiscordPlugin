@@ -329,7 +329,7 @@ module.exports = class BasicPlugin {
         console.log(`${displayName} : old: ${previousStatus}, new: ${update.status}`);
 
         if (message) {
-          if (currentChannel.type == 0) {
+          if (currentChannel && currentChannel.type == 0) {
             const customMessage = {
               id: Date.now().toString(),
               type: 0,
