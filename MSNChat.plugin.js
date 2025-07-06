@@ -510,6 +510,12 @@ module.exports = class BasicPlugin {
         background-color: #f1f0eb !important;
       }
 
+      aside[class^="membersWrap"] div[class^="members_"] {
+        background-color: #f1f0eb !important;
+        scrollbar-width: none; /* hides scrollbar */
+        -ms-overflow-style: none; /* for IE and Edge */
+      }
+
       section[aria-label="Channel header"] {
         background-color: #4a659c !important;
       }
