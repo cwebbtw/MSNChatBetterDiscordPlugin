@@ -13,6 +13,11 @@ const MSN_CHAT_ROOT_STYLE = 'msn-chat-bg-style';
 
 module.exports = class BasicPlugin {
 
+  constructor() {
+    this._lastOnlineCount = null;
+    this._lastOnlineCountTime = 0;
+  }
+
   getChannelName() {
     const headerElements = [...document.querySelectorAll('h1')].find(el => 
       Array.from(el.classList).some(c => c.startsWith('title__'))
@@ -21,12 +26,12 @@ module.exports = class BasicPlugin {
     if (!headerElements) return 'Unknown';
 
     const parts = headerElements.textContent.split(':');
-    if (!parts[1]) return 'Unknown';
+    if (!parts[1]) return headerElements.textContent;
 
     const secondToken = parts[1].trim();
     const tokens = secondToken.split('︱').map(t => t.trim());
 
-    if (!tokens[1]) return 'Unknown';
+    if (!tokens[1]) return secondToken;
 
     const formatted = tokens[1]
       .replace(/-/g, ' ')
@@ -34,10 +39,103 @@ module.exports = class BasicPlugin {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
 
-    return formatted || 'Unknown';
+    return formatted || tokens[1];
   }
 
-  createChannelNameheader(memberList, displayableMemberCount) {
+  hasViewChannelPermission(RolesStore, user, guild, channel) {
+    const rolesMap = RolesStore.getRoles(guild.id) || {};
+
+    const userRoles = (user.roles || []).concat(guild.id);
+
+    let permissions = 0n;
+    for (const roleId of userRoles) {
+      const role = rolesMap[roleId];
+      if (role && role.permissions !== undefined) {
+        permissions |= BigInt(role.permissions);
+      }
+    }
+
+    const ADMINISTRATOR = 1n << 3n;
+    if ((permissions & ADMINISTRATOR) === ADMINISTRATOR) {
+      return true;
+    }
+
+    if (user.userId === guild.ownerId) {
+      return true;
+    }
+
+    if (channel.permissionOverwrites) {
+      const everyoneOverwrite = channel.permissionOverwrites[guild.id];
+      if (everyoneOverwrite) {
+        permissions &= ~BigInt(everyoneOverwrite.deny);
+        permissions |= BigInt(everyoneOverwrite.allow);
+      }
+
+      let allow = 0n, deny = 0n;
+      for (const roleId of userRoles) {
+        const overwrite = channel.permissionOverwrites[roleId];
+        if (overwrite) {
+          allow |= BigInt(overwrite.allow);
+          deny |= BigInt(overwrite.deny);
+        }
+      }
+      permissions &= ~deny;
+      permissions |= allow;
+
+      const memberOverwrite = channel.permissionOverwrites[user.userId];
+      if (memberOverwrite) {
+        permissions &= ~BigInt(memberOverwrite.deny);
+        permissions |= BigInt(memberOverwrite.allow);
+      }
+    }
+
+  const VIEW_CHANNEL = 1n << 10n;
+  return (permissions & VIEW_CHANNEL) === VIEW_CHANNEL;
+  }
+
+  getOnlineCount() {
+    const now = Date.now();
+    if (this._lastOnlineCount !== null && (now - this._lastOnlineCountTime) < 2000) {
+      return this._lastOnlineCount;
+    }
+
+    const RolesStore = BdApi.Webpack.getModule(m => m.getRole && m.getRoles);
+    const GuildMemberStore = BdApi.Webpack.getModule(m => m.getMember && m.getMembers);
+    const PresenceStore = BdApi.Webpack.getModule(m => m.getState && m.getStatus);
+    const SelectedChannelStore = BdApi.Webpack.getStore("SelectedChannelStore");
+    const ChannelStore = BdApi.Webpack.getStore("ChannelStore");
+    const GuildStore = BdApi.Webpack.getModule(m => m.getGuild && m.getGuilds);
+    
+    const currentChannelId = SelectedChannelStore.getChannelId();
+    const currentChannel = ChannelStore.getChannel(currentChannelId);
+
+    const SelectedGuildStore = BdApi.Webpack.getModule(m => m.getLastSelectedGuildId);
+    const guildId = SelectedGuildStore?.getLastSelectedGuildId();
+    const guild = GuildStore.getGuild(guildId);
+    const allMembers = GuildMemberStore.getMembers(guildId);
+
+    let onlineCount = 0;
+
+    for (const memberId in allMembers) {
+
+      const status = PresenceStore.getStatus(allMembers[memberId].userId);
+
+      if (["online", "idle", "dnd", "unknown"].includes(status)) {
+        const canView = this.hasViewChannelPermission(RolesStore, allMembers[memberId], guild, currentChannel);
+
+        if (canView) {
+          onlineCount++;
+        }
+      }
+    }
+
+    this._lastOnlineCount = onlineCount;
+    this._lastOnlineCountTime = now;
+
+    return onlineCount;
+  }
+
+  createChannelNameheader(memberList, channelName) {
     if (!document.getElementById(MSN_CHAT_CHANNEL_HEADER_CONTAINER_ID)) {
       const box         = document.createElement('div');
       box.id            = MSN_CHAT_CHANNEL_HEADER_CONTAINER_ID;
@@ -78,12 +176,12 @@ module.exports = class BasicPlugin {
 
     var memberCount = document.getElementById(MSN_CHAT_MEMBER_COUNT_TEXT_ID);
     if (memberCount) {
-      memberCount.textContent = displayableMemberCount + ' people chatting';
+      memberCount.textContent = this.getOnlineCount() + ' people chatting';
     }
 
-    var channelName = document.getElementById(MSN_CHAT_CHANNEL_TEXT_ID);
-    if (channelName) {
-      channelName.textContent = this.getChannelName();
+    var channelNameObject = document.getElementById(MSN_CHAT_CHANNEL_TEXT_ID);
+    if (channelNameObject) {
+      channelNameObject.textContent = channelName;
     }
   }
 
@@ -100,7 +198,7 @@ module.exports = class BasicPlugin {
 
       memberList.parentElement.prepend(box);
 
-      const discordUser                                 = BdApi.findModule(m => m.getCurrentUser !== undefined)?.getCurrentUser();
+      const discordUser                          = BdApi.findModule(m => m.getCurrentUser !== undefined)?.getCurrentUser();
       const usernameContainer                    = document.createElement('div');
 
       usernameContainer.style.textAlign          = 'left';
@@ -122,10 +220,7 @@ module.exports = class BasicPlugin {
   }
 
   updateDocument() {
-
-    console.log('document updating');
-
-    var displayableMemberCount = 0;
+    var channelName = this.getChannelName();
 
     var memberList = document.querySelector('aside[class^="membersWrap_"] > * > div[aria-label="Members"]');
     if (!memberList) return;
@@ -134,32 +229,56 @@ module.exports = class BasicPlugin {
 
     for (const child of memberList.children) {
       if (child.tagName.toLowerCase() === 'h3') {
-        header = child.childNodes[1].textContent.split(' ')[0].toLowerCase();
+
+        var parts = child.childNodes[1].textContent.split(' ');
+
+        header = parts[0].toLowerCase();
+        var count = parseInt(parts[2]);
+
         continue;
-      }
+      } else {
+        const span = child.querySelector('span[class*="name__"][class*="username__"]:not(:has(span))');
+        const idle = child.querySelector('div[aria-label$="Idle"]');
+        if (idle) {
+          span.style.color = 'grey';
+          child.style.backgroundImage     = "url('data:image/png;base64,Qk22BAAAAAAAADYAAAAoAAAAEgAAABAAAAABACAAAAAAAAAAAAASCwAAEgsAAAAAAAAAAAAA/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/4CAgP//////////////////////////////////////////////////////gICA/8DAwP/AwMD/wMDA/8DAwP+AgID/gICA/wAAAP+AgID/gICA/4CAgP+AgID/gICA//////////////////////+AgID//////////////////////8DAwP/AwMD/gICA/4CAgP8AAAD/AAAA/wAAAP8AAAD/gICA/4CAgP///////////8DAwP+AgAD/gIAA/4CAAP+AgAD/gIAA/4CAAP+AgAD/gIAA/4CAgP+AgAD/AAAA/4CAgP//////gICA/wAAAP///////////8DAwP/////////////////////////////////AwMD/wMDA/4CAgP+AgID/AAAA/4CAgP//////gICA/wAAAP///////////8DAwP+AgAD/gIAA/4CAAP+AgAD/gIAA/4CAAP+AgAD/gIAA/4CAgP+AgAD/AAAA/4CAgP//////gICA/wAAAP///////////8DAwP/////////////////////////////////AwMD/wMDA/4CAgP+AgID/AAAA/wAAAP8AAAD/AAAA/4CAgP///////////8DAwP//////////////////////////////////////wMDA/8DAwP+AgID/AAAA///////////////////////////////////////AwMD/wMDA/8DAwP/AwMD/wMDA/8DAwP/AwMD/wMDA/8DAwP+AgID///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+AgID/gICA/8DAwP////////////////////////////////////////////////////////////////////////////////////////////////+AgID///////////////////////////////////////////////////////////////////////////+AgID//////4CAgP///////////////////////////////////////////////////////////////////////////4CAgP//////////////////////////////////////////////////////////////////////////////////////////////////////gICA////////////////////////////////////////////////////////////')";
+          child.style.backgroundRepeat    = 'no-repeat';
+          child.style.backgroundPosition  = 'left 2px top 7px';
+          child.style.backgroundSize      = '18px auto';
+        } else if (span) {
+          span.style.color = '';
+          child.style.backgroundImage     = '';
+          child.style.backgroundRepeat    = '';
+          child.style.backgroundPosition  = '';
+          child.style.backgroundSize      = '';
+        }
 
-      if (child.className.indexOf('offline__') == -1 && child.className.indexOf('member__') != -1) {
-        displayableMemberCount += 1;
-      }
+        if (header == 'sysop' || header == 'admin') {
+          if (!idle) {
+            child.style.backgroundImage     = "url('data:image/png;base64,UklGRmYKAABXRUJQVlA4WAoAAAAwAAAAHwAAHwAASUNDUMgHAAAAAAfIYXBwbAIgAABtbnRyUkdCIFhZWiAH2QACABkACwAaAAthY3NwQVBQTAAAAABhcHBsAAAAAAAAAAAAAAAAAAAAAAAA9tYAAQAAAADTLWFwcGwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtkZXNjAAABCAAAAG9kc2NtAAABeAAABYpjcHJ0AAAHBAAAADh3dHB0AAAHPAAAABRyWFlaAAAHUAAAABRnWFlaAAAHZAAAABRiWFlaAAAHeAAAABRyVFJDAAAHjAAAAA5jaGFkAAAHnAAAACxiVFJDAAAHjAAAAA5nVFJDAAAHjAAAAA5kZXNjAAAAAAAAABRHZW5lcmljIFJHQiBQcm9maWxlAAAAAAAAAAAAAAAUR2VuZXJpYyBSR0IgUHJvZmlsZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbWx1YwAAAAAAAAAfAAAADHNrU0sAAAAoAAABhGRhREsAAAAkAAABrGNhRVMAAAAkAAAB0HZpVk4AAAAkAAAB9HB0QlIAAAAmAAACGHVrVUEAAAAqAAACPmZyRlUAAAAoAAACaGh1SFUAAAAoAAACkHpoVFcAAAASAAACuGtvS1IAAAAWAAACym5iTk8AAAAmAAAC4GNzQ1oAAAAiAAADBmhlSUwAAAAeAAADKHJvUk8AAAAkAAADRmRlREUAAAAsAAADaml0SVQAAAAoAAADlnN2U0UAAAAmAAAC4HpoQ04AAAASAAADvmphSlAAAAAaAAAD0GVsR1IAAAAiAAAD6nB0UE8AAAAmAAAEDG5sTkwAAAAoAAAEMmVzRVMAAAAmAAAEDHRoVEgAAAAkAAAEWnRyVFIAAAAiAAAEfmZpRkkAAAAoAAAEoGhySFIAAAAoAAAEyHBsUEwAAAAsAAAE8HJ1UlUAAAAiAAAFHGVuVVMAAAAmAAAFPmFyRUcAAAAmAAAFZABWAWEAZQBvAGIAZQBjAG4A/QAgAFIARwBCACAAcAByAG8AZgBpAGwARwBlAG4AZQByAGUAbAAgAFIARwBCAC0AcAByAG8AZgBpAGwAUABlAHIAZgBpAGwAIABSAEcAQgAgAGcAZQBuAOgAcgBpAGMAQx6lAHUAIABoAOwAbgBoACAAUgBHAEIAIABDAGgAdQBuAGcAUABlAHIAZgBpAGwAIABSAEcAQgAgAEcAZQBuAOkAcgBpAGMAbwQXBDAEMwQwBDsETAQ9BDgEOQAgBD8EQAQ+BEQEMAQ5BDsAIABSAEcAQgBQAHIAbwBmAGkAbAAgAGcA6QBuAOkAcgBpAHEAdQBlACAAUgBWAEIAwQBsAHQAYQBsAOEAbgBvAHMAIABSAEcAQgAgAHAAcgBvAGYAaQBskBp1KABSAEcAQoJyX2ljz4/wx3y8GAAgAFIARwBCACDVBLhc0wzHfABHAGUAbgBlAHIAaQBzAGsAIABSAEcAQgAtAHAAcgBvAGYAaQBsAE8AYgBlAGMAbgD9ACAAUgBHAEIAIABwAHIAbwBmAGkAbAXkBegF1QXkBdkF3AAgAFIARwBCACAF2wXcBdwF2QBQAHIAbwBmAGkAbAAgAFIARwBCACAAZwBlAG4AZQByAGkAYwBBAGwAbABnAGUAbQBlAGkAbgBlAHMAIABSAEcAQgAtAFAAcgBvAGYAaQBsAFAAcgBvAGYAaQBsAG8AIABSAEcAQgAgAGcAZQBuAGUAcgBpAGMAb2ZukBoAUgBHAEJjz4/wZYdO9k4AgiwAIABSAEcAQgAgMNcw7TDVMKEwpDDrA5MDtQO9A7kDugPMACADwAPBA78DxgOvA7sAIABSAEcAQgBQAGUAcgBmAGkAbAAgAFIARwBCACAAZwBlAG4A6QByAGkAYwBvAEEAbABnAGUAbQBlAGUAbgAgAFIARwBCAC0AcAByAG8AZgBpAGUAbA5CDhsOIw5EDh8OJQ5MACAAUgBHAEIAIA4XDjEOSA4nDkQOGwBHAGUAbgBlAGwAIABSAEcAQgAgAFAAcgBvAGYAaQBsAGkAWQBsAGUAaQBuAGUAbgAgAFIARwBCAC0AcAByAG8AZgBpAGkAbABpAEcAZQBuAGUAcgBpAQ0AawBpACAAUgBHAEIAIABwAHIAbwBmAGkAbABVAG4AaQB3AGUAcgBzAGEAbABuAHkAIABwAHIAbwBmAGkAbAAgAFIARwBCBB4EMQRJBDgEOQAgBD8EQAQ+BEQEOAQ7BEwAIABSAEcAQgBHAGUAbgBlAHIAaQBjACAAUgBHAEIAIABQAHIAbwBmAGkAbABlBkUGRAZBACAGKgY5BjEGSgZBACAAUgBHAEIAIAYnBkQGOQYnBkUAAHRleHQAAAAAQ29weXJpZ2h0IDIwMDcgQXBwbGUgSW5jLiwgYWxsIHJpZ2h0cyByZXNlcnZlZC4AWFlaIAAAAAAAAPNSAAEAAAABFs9YWVogAAAAAAAAdE0AAD3uAAAD0FhZWiAAAAAAAABadQAArHMAABc0WFlaIAAAAAAAACgaAAAVnwAAuDZjdXJ2AAAAAAAAAAEBzQAAc2YzMgAAAAAAAQxCAAAF3v//8yYAAAeSAAD9kf//+6L///2jAAAD3AAAwGxBTFBIWQAAAAEPMP8REcJRbdtOc+kdJCDlOeMyi63vIBLyJfxh6rvpGiL6PwH4dwWCAZFA4ogzN9zpmdMb0RfxfhLvEs+SpR9RsiDZLhk+XIb7j7PWL0kL4rFBOBTYG/wPAFZQOCAWAgAAcAwAnQEqIAAgAD5lKJFFpCKhmAYAQAZEtgBOnKCdf/OeEM3d7m5IHzlsHO4A/XffAP2A6wD9QPYA/YD0w/1m+A79nf3K9pFFAJr1/nvI185ewB5DvUAfsY1zOoxznHatL00Wt6vxOqBgX+AAAP7/fIH/cefpuwTOOQS0ht7KA6P/0iFpdO/Tvy1m/wh3yRn/X6CT/8q/wF/vzWoP+7PftH3Bnuh7lOW6Kj09MV/JanZz23f+J4LO1eR0albb91Fk7ad7ojyBZeOLx0LebzDHws17gNDdsz4fCzPh+hvcY9qLuLWL/tEsYLWL/spsA/YaPwf+VLEth37IHxcLPDic/Id4BB/s2rrZjz/5cn8ub4udWkSbXO/2EX4/yBjo8lpN+33/8Nwq+tbmH35QWuhsK/6RNoJr5iLDWx3wSMOMXjjdq78nbCkaI2hIrFo8TBr4J7/zcw4N3lB4v7uHGFDOBenZ/6b2SXqY3ZI48UzxAjR5K7NOL/IGdRiJX/5aLaG9pN/Uo7jtmvewA1McOvWn6PMQkxq6oQhL2BiP+YzUVuV5sMW0hqikO/6HV6ryDOPJWSar7M5kblqr53xypAjz8TyWSKf0K+aIYxv3ZMRQFojeUSgcfdVVae5D5L//0clU0DKcJ8s6tqH4fRQz5/j8wJe9dPzTB95mPwEwsv///GLXVevpUfBrRk4CB36Bfz6uILsGgAAA')";
+            child.style.backgroundRepeat    = 'no-repeat';
+            child.style.backgroundPosition  = 'left 0px top 7px';
+            child.style.backgroundSize      = '18px auto';
+          }
 
-      if (header == 'sysop' || header == 'admin') {
-        child.style.backgroundImage     = "url('data:image/png;base64,UklGRmYKAABXRUJQVlA4WAoAAAAwAAAAHwAAHwAASUNDUMgHAAAAAAfIYXBwbAIgAABtbnRyUkdCIFhZWiAH2QACABkACwAaAAthY3NwQVBQTAAAAABhcHBsAAAAAAAAAAAAAAAAAAAAAAAA9tYAAQAAAADTLWFwcGwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtkZXNjAAABCAAAAG9kc2NtAAABeAAABYpjcHJ0AAAHBAAAADh3dHB0AAAHPAAAABRyWFlaAAAHUAAAABRnWFlaAAAHZAAAABRiWFlaAAAHeAAAABRyVFJDAAAHjAAAAA5jaGFkAAAHnAAAACxiVFJDAAAHjAAAAA5nVFJDAAAHjAAAAA5kZXNjAAAAAAAAABRHZW5lcmljIFJHQiBQcm9maWxlAAAAAAAAAAAAAAAUR2VuZXJpYyBSR0IgUHJvZmlsZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbWx1YwAAAAAAAAAfAAAADHNrU0sAAAAoAAABhGRhREsAAAAkAAABrGNhRVMAAAAkAAAB0HZpVk4AAAAkAAAB9HB0QlIAAAAmAAACGHVrVUEAAAAqAAACPmZyRlUAAAAoAAACaGh1SFUAAAAoAAACkHpoVFcAAAASAAACuGtvS1IAAAAWAAACym5iTk8AAAAmAAAC4GNzQ1oAAAAiAAADBmhlSUwAAAAeAAADKHJvUk8AAAAkAAADRmRlREUAAAAsAAADaml0SVQAAAAoAAADlnN2U0UAAAAmAAAC4HpoQ04AAAASAAADvmphSlAAAAAaAAAD0GVsR1IAAAAiAAAD6nB0UE8AAAAmAAAEDG5sTkwAAAAoAAAEMmVzRVMAAAAmAAAEDHRoVEgAAAAkAAAEWnRyVFIAAAAiAAAEfmZpRkkAAAAoAAAEoGhySFIAAAAoAAAEyHBsUEwAAAAsAAAE8HJ1UlUAAAAiAAAFHGVuVVMAAAAmAAAFPmFyRUcAAAAmAAAFZABWAWEAZQBvAGIAZQBjAG4A/QAgAFIARwBCACAAcAByAG8AZgBpAGwARwBlAG4AZQByAGUAbAAgAFIARwBCAC0AcAByAG8AZgBpAGwAUABlAHIAZgBpAGwAIABSAEcAQgAgAGcAZQBuAOgAcgBpAGMAQx6lAHUAIABoAOwAbgBoACAAUgBHAEIAIABDAGgAdQBuAGcAUABlAHIAZgBpAGwAIABSAEcAQgAgAEcAZQBuAOkAcgBpAGMAbwQXBDAEMwQwBDsETAQ9BDgEOQAgBD8EQAQ+BEQEMAQ5BDsAIABSAEcAQgBQAHIAbwBmAGkAbAAgAGcA6QBuAOkAcgBpAHEAdQBlACAAUgBWAEIAwQBsAHQAYQBsAOEAbgBvAHMAIABSAEcAQgAgAHAAcgBvAGYAaQBskBp1KABSAEcAQoJyX2ljz4/wx3y8GAAgAFIARwBCACDVBLhc0wzHfABHAGUAbgBlAHIAaQBzAGsAIABSAEcAQgAtAHAAcgBvAGYAaQBsAE8AYgBlAGMAbgD9ACAAUgBHAEIAIABwAHIAbwBmAGkAbAXkBegF1QXkBdkF3AAgAFIARwBCACAF2wXcBdwF2QBQAHIAbwBmAGkAbAAgAFIARwBCACAAZwBlAG4AZQByAGkAYwBBAGwAbABnAGUAbQBlAGkAbgBlAHMAIABSAEcAQgAtAFAAcgBvAGYAaQBsAFAAcgBvAGYAaQBsAG8AIABSAEcAQgAgAGcAZQBuAGUAcgBpAGMAb2ZukBoAUgBHAEJjz4/wZYdO9k4AgiwAIABSAEcAQgAgMNcw7TDVMKEwpDDrA5MDtQO9A7kDugPMACADwAPBA78DxgOvA7sAIABSAEcAQgBQAGUAcgBmAGkAbAAgAFIARwBCACAAZwBlAG4A6QByAGkAYwBvAEEAbABnAGUAbQBlAGUAbgAgAFIARwBCAC0AcAByAG8AZgBpAGUAbA5CDhsOIw5EDh8OJQ5MACAAUgBHAEIAIA4XDjEOSA4nDkQOGwBHAGUAbgBlAGwAIABSAEcAQgAgAFAAcgBvAGYAaQBsAGkAWQBsAGUAaQBuAGUAbgAgAFIARwBCAC0AcAByAG8AZgBpAGkAbABpAEcAZQBuAGUAcgBpAQ0AawBpACAAUgBHAEIAIABwAHIAbwBmAGkAbABVAG4AaQB3AGUAcgBzAGEAbABuAHkAIABwAHIAbwBmAGkAbAAgAFIARwBCBB4EMQRJBDgEOQAgBD8EQAQ+BEQEOAQ7BEwAIABSAEcAQgBHAGUAbgBlAHIAaQBjACAAUgBHAEIAIABQAHIAbwBmAGkAbABlBkUGRAZBACAGKgY5BjEGSgZBACAAUgBHAEIAIAYnBkQGOQYnBkUAAHRleHQAAAAAQ29weXJpZ2h0IDIwMDcgQXBwbGUgSW5jLiwgYWxsIHJpZ2h0cyByZXNlcnZlZC4AWFlaIAAAAAAAAPNSAAEAAAABFs9YWVogAAAAAAAAdE0AAD3uAAAD0FhZWiAAAAAAAABadQAArHMAABc0WFlaIAAAAAAAACgaAAAVnwAAuDZjdXJ2AAAAAAAAAAEBzQAAc2YzMgAAAAAAAQxCAAAF3v//8yYAAAeSAAD9kf//+6L///2jAAAD3AAAwGxBTFBIWQAAAAEPMP8REcJRbdtOc+kdJCDlOeMyi63vIBLyJfxh6rvpGiL6PwH4dwWCAZFA4ogzN9zpmdMb0RfxfhLvEs+SpR9RsiDZLhk+XIb7j7PWL0kL4rFBOBTYG/wPAFZQOCAWAgAAcAwAnQEqIAAgAD5lKJFFpCKhmAYAQAZEtgBOnKCdf/OeEM3d7m5IHzlsHO4A/XffAP2A6wD9QPYA/YD0w/1m+A79nf3K9pFFAJr1/nvI185ewB5DvUAfsY1zOoxznHatL00Wt6vxOqBgX+AAAP7/fIH/cefpuwTOOQS0ht7KA6P/0iFpdO/Tvy1m/wh3yRn/X6CT/8q/wF/vzWoP+7PftH3Bnuh7lOW6Kj09MV/JanZz23f+J4LO1eR0albb91Fk7ad7ojyBZeOLx0LebzDHws17gNDdsz4fCzPh+hvcY9qLuLWL/tEsYLWL/spsA/YaPwf+VLEth37IHxcLPDic/Id4BB/s2rrZjz/5cn8ub4udWkSbXO/2EX4/yBjo8lpN+33/8Nwq+tbmH35QWuhsK/6RNoJr5iLDWx3wSMOMXjjdq78nbCkaI2hIrFo8TBr4J7/zcw4N3lB4v7uHGFDOBenZ/6b2SXqY3ZI48UzxAjR5K7NOL/IGdRiJX/5aLaG9pN/Uo7jtmvewA1McOvWn6PMQkxq6oQhL2BiP+YzUVuV5sMW0hqikO/6HV6ryDOPJWSar7M5kblqr53xypAjz8TyWSKf0K+aIYxv3ZMRQFojeUSgcfdVVae5D5L//0clU0DKcJ8s6tqH4fRQz5/j8wJe9dPzTB95mPwEwsv///GLXVevpUfBrRk4CB36Bfz6uILsGgAAA')";
-        child.style.backgroundRepeat    = 'no-repeat';
-        child.style.backgroundPosition  = 'left 0px top 7px';
-        child.style.backgroundSize      = '18px auto';
-
-        const span = child.querySelector('span[class*="name__"][class*="username__"]');
-        if (span && !span.textContent.includes('(Host)')) {
-          span.textContent += ' (Host)';
+          if (span && !span.textContent.includes('(Host)')) {
+            span.textContent += ' (Host)';
+          }
         }
       }
     }
 
     this.createUserNameHeader(memberList);
-    this.createChannelNameheader(memberList, displayableMemberCount);
+    this.createChannelNameheader(memberList, channelName);
   }
 
   start() {
+
+    this.getOnlineCount();
+
+    this.userStatus = {};
+    this.channelCount = {};
+
     const css = `
       [class*="chatContent"],
       [class*="chat-"],
