@@ -320,9 +320,9 @@ module.exports = class BasicPlugin {
           } else {
             message = `${displayName} is away.`
           }
-        } else if (["offline", undefined].includes(previousStatus) && ["idle", "online"].includes(previousStatus)) {
+        } else if (["offline", undefined].includes(previousStatus) && ["online"].includes(update.status)) {
           message = `${displayName} has joined the conversation.`
-        } else if (["idle", "online"].includes(previousStatus) && ["offline", undefined].includes(previousStatus)) {
+        } else if (["online"].includes(previousStatus) && ["offline", undefined].includes(update.status)) {
           message = `${displayName} has left the conversation.`
         }
 
