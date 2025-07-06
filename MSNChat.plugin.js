@@ -202,11 +202,10 @@ module.exports = class BasicPlugin {
 
       memberList.parentElement.prepend(box);
 
-      const discordUser                          = BdApi.findModule(m => m.getCurrentUser !== undefined)?.getCurrentUser();
       const usernameContainer                    = document.createElement('div');
 
       usernameContainer.style.textAlign          = 'left';
-      usernameContainer.textContent              = discordUser?.globalName || 'Unknown';
+      usernameContainer.textContent              = this.getMyName();
       usernameContainer.style.fontFamily         = 'Tahoma, sans-serif';
       usernameContainer.style.fontWeight         = 'bold';
       usernameContainer.style.fontSize           = '16px';
@@ -276,6 +275,20 @@ module.exports = class BasicPlugin {
     this.createChannelNameheader(memberList, channelName);
   }
 
+  getMyName() {
+    const userId = BdApi.Webpack.getModule(m => m.getCurrentUser).getCurrentUser().id;
+    const SelectedGuildStore = BdApi.Webpack.getModule(m => m.getLastSelectedGuildId);
+    const GuildMemberStore = BdApi.Webpack.getModule(m => m.getMember && m.getMembers);
+    const UserStore = BdApi.Webpack.getModule(m => m.getUser && m.getCurrentUser);
+    const guildId = SelectedGuildStore?.getLastSelectedGuildId();
+    const member = GuildMemberStore.getMember(guildId, userId);
+    const user = UserStore.getUser(userId);
+
+    return member?.nick ||
+          user?.globalName ||
+          user?.username ||
+          "Unknown";
+  }
 
   onPresenceUpdate(event) {
     try {
