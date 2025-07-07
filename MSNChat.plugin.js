@@ -180,7 +180,8 @@ module.exports = class BasicPlugin {
 
     var memberCount = document.getElementById(MSN_CHAT_MEMBER_COUNT_TEXT_ID);
     if (memberCount) {
-      memberCount.textContent = this.getOnlineCount() + ' people chatting';
+      const count = this.getOnlineCount();
+      memberCount.textContent = count + ' ' + (count === 1 ? 'person' : 'people') + ' chatting';
     }
 
     var channelNameObject = document.getElementById(MSN_CHAT_CHANNEL_TEXT_ID);
