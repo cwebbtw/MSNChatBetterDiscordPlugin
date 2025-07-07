@@ -191,6 +191,12 @@ module.exports = class BasicPlugin {
   }
 
   createUserNameHeader(memberList) {
+    const userId = BdApi.Webpack.getModule(m => m.getCurrentUser).getCurrentUser().id;
+    const SelectedGuildStore = BdApi.Webpack.getModule(m => m.getLastSelectedGuildId);
+    const GuildMemberStore = BdApi.Webpack.getModule(m => m.getMember && m.getMembers);
+    const guildId = SelectedGuildStore?.getLastSelectedGuildId();
+    const member = GuildMemberStore.getMember(guildId, userId);
+
     if (!document.getElementById(MSN_CHAT_USERNAME_HEADER_ID)) {
       const box         = document.createElement('div');
       box.id            = MSN_CHAT_USERNAME_HEADER_ID;
@@ -201,6 +207,31 @@ module.exports = class BasicPlugin {
         z-index: 10;
       `;
 
+      // TODO: These roles really need to not be hard coded and should be obtained dynamically
+      if (this.userStatus[userId] === "idle") {
+        box.style.cssText += `
+          background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-coffee.png');
+          background-repeat: no-repeat;
+          background-position: left 11px top 10px;
+          background-size: 18px auto;
+        `
+      }
+      else if (member?.roles?.includes("1391909308949598260")) {
+        box.style.cssText += `
+          background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-owner.png');
+          background-repeat: no-repeat;
+          background-position: left 8px top 10px;
+          background-size: 18px auto;
+        `
+      } else if (member?.roles?.includes("1391909621135839273")) {
+        box.style.cssText += `
+          background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-host.png');
+          background-repeat: no-repeat;
+          background-position: left 8px top 10px;
+          background-size: 18px auto;
+        `
+      }
+
       memberList.parentElement.prepend(box);
 
       const usernameContainer                    = document.createElement('div');
@@ -209,7 +240,7 @@ module.exports = class BasicPlugin {
       usernameContainer.textContent              = this.getMyName();
       usernameContainer.style.fontFamily         = 'Tahoma, sans-serif';
       usernameContainer.style.fontWeight         = 'bold';
-      usernameContainer.style.fontSize           = '16px';
+      usernameContainer.style.fontSize           = '15px';
       usernameContainer.style.paddingTop         = '12px';
       usernameContainer.style.paddingLeft        = '33px';
       usernameContainer.style.paddingBottom      = '12px';
@@ -269,10 +300,26 @@ module.exports = class BasicPlugin {
             child.style.backgroundSize      = '18px auto';
           }
 
-          if (span && !span.textContent.includes('(Host)')) {
-            span.textContent += ' (Host)';
+        } else if (header == 'owner') {
+          if (!idle) {
+            child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-owner.png')";
+            child.style.backgroundRepeat    = 'no-repeat';
+            child.style.backgroundPosition  = 'left 2px top 7px';
+            child.style.backgroundSize      = '18px auto';
+          }
+        } else if (header == 'host') {
+          if (!idle) {
+            child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-host.png')";
+            child.style.backgroundRepeat    = 'no-repeat';
+            child.style.backgroundPosition  = 'left 2px top 7px';
+            child.style.backgroundSize      = '18px auto';
           }
         }
+
+        if (span && !span.textContent.includes('(Host)') && ['admin', 'sysop', 'owner', 'host'].includes(header)) {
+          span.textContent += ' (Host)';
+        }
+
       }
     }
 
@@ -354,13 +401,13 @@ module.exports = class BasicPlugin {
               content: message,
               channel_id: currentChannelId,
               author: {
-                id: 1234,
-                username: "You",
+                id: "1234",
+                username: "Bugsy",
                 discriminator: "0000",
                 avatar: null,
                 bot: false,
               },
-              timestamp: new Date().toISOString(),
+              timestamp: new Date(),
               state: "SENT"
             };
             MessageActions.receiveMessage(currentChannelId, customMessage);
@@ -373,6 +420,9 @@ module.exports = class BasicPlugin {
   }
 
   start() {
+    // TODO: Temporary hack to populate user status
+    this.getOnlineCount();
+
     const Dispatcher = BdApi.Webpack.getModule(m => 
       typeof m?.subscribe === "function" && 
       typeof m?.dispatch === "function"
@@ -406,7 +456,7 @@ module.exports = class BasicPlugin {
       [class*="messageContent"] {
         color: #000000 !important;
       }
-      div[aria-label="Members"] {
+      div[role="list"][aria-label="Members"] {
         background-color: #ffffff !important;
       }
       ul[aria-label="Channels"] > :first-child {
@@ -590,9 +640,9 @@ module.exports = class BasicPlugin {
         min-height: 20px !important;
       }
 
-      div[data-author-id="1234"][class*="groupStart__"] {
-        padding-top: 15px !important;
-      }
+      // div[data-author-id="1234"][class*="groupStart__"] {
+      //   padding-top: 15px !important;
+      // }
 
       div[data-author-id="1234"]::before {
         content: "▶";
