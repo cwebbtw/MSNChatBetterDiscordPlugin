@@ -17,6 +17,7 @@ module.exports = class BasicPlugin {
     this._lastOnlineCount = null;
     this._lastOnlineCountTime = 0;
     this.userStatus = {};
+    this.guildRolesMap = {};
   }
 
   getChannelName() {
@@ -106,7 +107,6 @@ module.exports = class BasicPlugin {
     const SelectedChannelStore = BdApi.Webpack.getStore("SelectedChannelStore");
     const ChannelStore = BdApi.Webpack.getStore("ChannelStore");
     const GuildStore = BdApi.Webpack.getModule(m => m.getGuild && m.getGuilds);
-    const UserStore = BdApi.Webpack.getModule(m => m.getUser && m.getCurrentUser);
     
     const currentChannelId = SelectedChannelStore.getChannelId();
     const currentChannel = ChannelStore.getChannel(currentChannelId);
@@ -115,6 +115,9 @@ module.exports = class BasicPlugin {
     const guildId = SelectedGuildStore?.getLastSelectedGuildId();
     const guild = GuildStore.getGuild(guildId);
     const allMembers = GuildMemberStore.getMembers(guildId);
+    this.guildRolesMap = new Map(
+      Object.values(RolesStore.getRoles(guildId)).map(role => [role.name, role.id])
+    )
 
     let onlineCount = 0;
 
@@ -200,37 +203,6 @@ module.exports = class BasicPlugin {
     if (!document.getElementById(MSN_CHAT_USERNAME_HEADER_ID)) {
       const box         = document.createElement('div');
       box.id            = MSN_CHAT_USERNAME_HEADER_ID;
-      box.style.cssText = `
-        background-color: #eeeff8;
-        position: sticky;
-        top: 60px;
-        z-index: 10;
-      `;
-
-      // TODO: These roles really need to not be hard coded and should be obtained dynamically
-      if (this.userStatus[userId] === "idle") {
-        box.style.cssText += `
-          background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-coffee.png');
-          background-repeat: no-repeat;
-          background-position: left 11px top 10px;
-          background-size: 18px auto;
-        `
-      }
-      else if (member?.roles?.includes("1391909308949598260")) {
-        box.style.cssText += `
-          background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-owner.png');
-          background-repeat: no-repeat;
-          background-position: left 8px top 10px;
-          background-size: 18px auto;
-        `
-      } else if (member?.roles?.includes("1391909621135839273")) {
-        box.style.cssText += `
-          background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-host.png');
-          background-repeat: no-repeat;
-          background-position: left 8px top 10px;
-          background-size: 18px auto;
-        `
-      }
 
       memberList.parentElement.prepend(box);
 
@@ -251,6 +223,38 @@ module.exports = class BasicPlugin {
       usernameContainer.style.backgroundSize     = '32px auto';
 
       box.appendChild(usernameContainer);
+    }
+
+    const box = document.getElementById(MSN_CHAT_USERNAME_HEADER_ID);
+    box.style.cssText = `
+      background-color: #eeeff8;
+      position: sticky;
+      top: 60px;
+      z-index: 10;
+    `;
+
+    if (this.userStatus[userId] === "idle") {
+      box.style.cssText += `
+        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-coffee.png');
+        background-repeat: no-repeat;
+        background-position: left 11px top 10px;
+        background-size: 18px auto;
+      `
+    }
+    else if (member?.roles?.includes(this.guildRolesMap?.get("Owner"))) {
+      box.style.cssText += `
+        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-owner.png');
+        background-repeat: no-repeat;
+        background-position: left 8px top 10px;
+        background-size: 18px auto;
+      `
+    } else if (member?.roles?.includes(this.guildRolesMap?.get("Host"))) {
+      box.style.cssText += `
+        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-host.png');
+        background-repeat: no-repeat;
+        background-position: left 8px top 10px;
+        background-size: 18px auto;
+      `
     }
   }
 
