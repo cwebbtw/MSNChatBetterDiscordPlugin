@@ -62,11 +62,11 @@ module.exports = class BasicPlugin {
       return true;
     }
 
-    if (user.userId === guild.ownerId) {
+    if (user?.userId === guild.ownerId) {
       return true;
     }
 
-    if (channel.permissionOverwrites) {
+    if (channel?.permissionOverwrites) {
       const everyoneOverwrite = channel.permissionOverwrites[guild.id];
       if (everyoneOverwrite) {
         permissions &= ~BigInt(everyoneOverwrite.deny);
@@ -259,6 +259,9 @@ module.exports = class BasicPlugin {
   }
 
   updateDocument() {
+
+    console.log('updating');
+
     var channelName = this.getChannelName();
 
     var memberList = document.querySelector('aside[class^="membersWrap_"] > * > div[aria-label="Members"]');
@@ -421,6 +424,14 @@ module.exports = class BasicPlugin {
     } catch (error) {
       console.error("An error occurred:", error);
     }
+  }
+
+  debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
   }
 
   start() {
@@ -674,7 +685,9 @@ module.exports = class BasicPlugin {
     document.head.appendChild(this.styleElement);
 
     this.updateDocument();
-    this.observer = new MutationObserver(() => this.updateDocument());
+    this.observer = new MutationObserver(
+      this.debounce(() => this.updateDocument(), 100)
+    );
     const appMount = document.getElementById('app-mount');
     if (appMount) {
       this.observer.observe(appMount, { childList: true, subtree: true });
