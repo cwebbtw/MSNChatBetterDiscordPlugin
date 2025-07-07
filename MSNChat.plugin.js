@@ -231,17 +231,21 @@ module.exports = class BasicPlugin {
 
     var header;
 
+    const myName = this.getMyName();
+
     for (const child of memberList.children) {
       if (child.tagName.toLowerCase() === 'h3') {
-
         var parts = child.childNodes[1].textContent.split(' ');
-
         header = parts[0].toLowerCase();
-        var count = parseInt(parts[2]);
 
         continue;
       } else {
         const span = child.querySelector('span[class*="name__"][class*="username__"]:not(:has(span))');
+        if (span?.textContent?.trim() === myName) {
+            child.style.display           = 'none';
+            continue;
+        }
+
         const idle = child.querySelector('div[aria-label$="Idle"]');
         if (idle) {
           span.style.color = 'grey';
