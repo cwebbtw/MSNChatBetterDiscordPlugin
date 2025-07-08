@@ -165,7 +165,7 @@ module.exports = class BasicPlugin {
       channel.style.paddingLeft         = '14px';
       channel.style.paddingBottom       = '8px';
       channel.style.color               = '#fcfce6';
-      channel.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-butterfly-logo.png')";
+      channel.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-butterfly-logo.png')";
       channel.style.backgroundRepeat    = 'no-repeat';
       channel.style.backgroundPosition  = 'right 4px top 4px';
       channel.style.backgroundSize      = '38px auto';
@@ -224,7 +224,7 @@ module.exports = class BasicPlugin {
       usernameContainer.style.paddingLeft        = '33px';
       usernameContainer.style.paddingBottom      = '12px';
       usernameContainer.style.color              = '#000';
-      usernameContainer.style.backgroundImage    = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-coffee-cup-button.png')";
+      usernameContainer.style.backgroundImage    = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-coffee-cup-button.png')";
       usernameContainer.style.backgroundRepeat   = 'no-repeat';
       usernameContainer.style.backgroundPosition = 'right 4px top 3px';
       usernameContainer.style.backgroundSize     = '32px auto';
@@ -242,7 +242,7 @@ module.exports = class BasicPlugin {
 
     if (isIdle) {
       box.style.cssText += `
-        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-coffee.png');
+        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-self-nicklist-coffee.png');
         background-repeat: no-repeat;
         background-position: left 11px top 10px;
         background-size: 18px auto;
@@ -250,7 +250,7 @@ module.exports = class BasicPlugin {
     }
     else if (isOwner) {
       box.style.cssText += `
-        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-owner.png');
+        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-self-nicklist-owner.png');
         background-repeat: no-repeat;
         background-position: left 8px top 10px;
         background-size: 18px auto;
@@ -258,7 +258,7 @@ module.exports = class BasicPlugin {
 
     } else if (isHost) {
       box.style.cssText += `
-        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-host.png');
+        background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-self-nicklist-host.png');
         background-repeat: no-repeat;
         background-position: left 8px top 10px;
         background-size: 18px auto;
@@ -303,7 +303,7 @@ module.exports = class BasicPlugin {
           if (span) {
             span.style.color = 'grey';
           }
-          child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-coffee-cup.png')";
+          child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-nicklist-coffee-cup.png')";
           child.style.backgroundRepeat    = 'no-repeat';
           child.style.backgroundPosition  = 'left 2px top 7px';
           child.style.backgroundSize      = '18px auto';
@@ -317,7 +317,7 @@ module.exports = class BasicPlugin {
 
         if (header == 'sysop' || header == 'admin') {
           if (!idle) {
-            child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-butterfly.png')";
+            child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-nicklist-butterfly.png')";
             child.style.backgroundRepeat    = 'no-repeat';
             child.style.backgroundPosition  = 'left 0px top 7px';
             child.style.backgroundSize      = '18px auto';
@@ -325,14 +325,14 @@ module.exports = class BasicPlugin {
 
         } else if (header == 'owner') {
           if (!idle) {
-            child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-owner.png')";
+            child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-nicklist-owner.png')";
             child.style.backgroundRepeat    = 'no-repeat';
             child.style.backgroundPosition  = 'left 2px top 7px';
             child.style.backgroundSize      = '18px auto';
           }
         } else if (header == 'host') {
           if (!idle) {
-            child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-host.png')";
+            child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/icons/msn-nicklist-host.png')";
             child.style.backgroundRepeat    = 'no-repeat';
             child.style.backgroundPosition  = 'left 2px top 7px';
             child.style.backgroundSize      = '18px auto';
@@ -474,7 +474,7 @@ module.exports = class BasicPlugin {
 
       @font-face {
         font-family: 'OriginalTahoma';
-        src: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/main/xp-tahoma.otf') format('opentype');
+        src: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/main/fonts/xp-tahoma.otf') format('opentype');
         font-weight: normal;
         font-style: normal;
       }
