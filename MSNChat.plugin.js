@@ -12,6 +12,24 @@ const MSN_CHAT_USERNAME_HEADER_TEXT_ID = 'msn-chat-username-text';
 const MSN_CHAT_USERNAME_HEADER_ID = 'msn-chat-username-header';
 const MSN_CHAT_ROOT_STYLE = 'msn-chat-bg-style';
 
+class SizedQueue {
+  constructor(maxSize) {
+    this.maxSize = maxSize;
+    this.queue = [];
+  }
+
+  enqueue(item) {
+    if (this.queue.length >= this.maxSize) {
+      this.queue.shift();
+    }
+    this.queue.push(item);
+  }
+
+  getAll() {
+    return [...this.queue];
+  }
+}
+
 module.exports = class BasicPlugin {
 
   constructor() {
@@ -19,6 +37,7 @@ module.exports = class BasicPlugin {
     this._lastOnlineCountTime = 0;
     this.userStatus = {};
     this.guildRolesMap = {};
+    this.eventQueue = new SizedQueue(20);
   }
 
   getChannelName() {
@@ -315,7 +334,7 @@ module.exports = class BasicPlugin {
           child.style.backgroundSize      = '';
         }
 
-        if (header == 'sysop' || header == 'admin') {
+        if (header == 'sysop' || header == 'admin' || header == 'guide') {
           if (!idle) {
             child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-butterfly.png')";
             child.style.backgroundRepeat    = 'no-repeat';
@@ -339,7 +358,7 @@ module.exports = class BasicPlugin {
           }
         }
 
-        if (span && !span.textContent.includes('(Host)') && ['admin', 'sysop', 'owner', 'host'].includes(header)) {
+        if (span && !span.textContent.includes('(Host)') && ['admin', 'sysop', 'guide', 'owner', 'host'].includes(header)) {
           span.textContent += ' (Host)';
         }
 
@@ -365,12 +384,88 @@ module.exports = class BasicPlugin {
           "Unknown";
   }
 
+  onChannelSelect(channelSelectEvent) {
+    const GuildMemberStore = BdApi.Webpack.getModule(m => m.getMember && m.getMembers);
+    const GuildStore = BdApi.Webpack.getModule(m => m.getGuild && m.getGuilds);
+    const SelectedChannelStore = BdApi.Webpack.getStore("SelectedChannelStore");
+    const ChannelStore = BdApi.Webpack.getStore("ChannelStore");
+    const currentChannelId = SelectedChannelStore.getChannelId();
+    const currentChannel = ChannelStore.getChannel(currentChannelId);
+    const SelectedGuildStore = BdApi.Webpack.getModule(m => m.getLastSelectedGuildId);
+    const guildId = SelectedGuildStore?.getLastSelectedGuildId();
+    const guild = GuildStore.getGuild(guildId);
+    const RolesStore = BdApi.Webpack.getModule(m => m.getRole && m.getRoles);
+
+    setTimeout(() => {
+      const messages = document.querySelector('ol[role="list"][data-list-id="chat-messages"][aria-label^="Messages"]');
+      const allEvents = this.eventQueue.getAll();
+
+      let i = allEvents.length - 1;
+      let j = messages.children.length - 1;
+
+      while (i >= 0) {
+        const event = allEvents[i];
+        
+        if (event.guild !== channelSelectEvent.guildId)  {
+          i--;
+          continue;
+        }
+
+        const member = GuildMemberStore.getMember(channelSelectEvent.guildId, event.userId);
+
+        if (!this.hasViewChannelPermission(RolesStore, member, guild, currentChannel)) {
+          i--;
+          continue;
+        }
+
+        while (j >= 0) {
+          const id = messages.children[j].id;
+          if (id) {
+            const parts = id.split('-');
+            if (parts.length === 4) {
+              const snowflake = parts[3];
+              const eventTime = BigInt(event.time);
+              const msgTime = BigInt(snowflake);
+
+              if (eventTime > msgTime) break;
+            }
+          }
+          j--;
+        }
+
+        const entry = `
+          <div data-author-id="1234">
+            <div>
+              <div><span>${event.message}</span></div>
+            </div>
+          </div>
+        `;
+        const template = document.createElement('template');
+        template.innerHTML = entry.trim();
+        const entryNode = template.content.firstChild;
+
+        if (j >= 0) {
+          const refNode = messages.children[j].nextSibling;
+          messages.insertBefore(entryNode, refNode);
+        } else {
+          const lastItem = messages.lastElementChild;
+          if (lastItem) {
+            messages.insertBefore(entryNode, lastItem);
+          } else {
+            messages.appendChild(entryNode);
+          }
+        }
+
+        i--;
+      }
+    }, 200);
+  }
+
   onPresenceUpdate(event) {
     try {
       const GuildMemberStore = BdApi.Webpack.getModule(m => m.getMember && m.getMembers);
       const SelectedChannelStore = BdApi.Webpack.getStore("SelectedChannelStore");
       const UserStore = BdApi.Webpack.getModule(m => m.getUser && m.getCurrentUser);
-      const MessageActions = BdApi.Webpack.getModule(m => m.receiveMessage && m.sendMessage);
       const ChannelStore = BdApi.Webpack.getStore("ChannelStore");
       const currentChannelId = SelectedChannelStore.getChannelId();
       const currentChannel = ChannelStore.getChannel(currentChannelId);
@@ -418,28 +513,49 @@ module.exports = class BasicPlugin {
 
         if (message) {
           if (currentChannel && currentChannel.type == 0) {
-            const customMessage = {
-              id: Date.now().toString(),
-              type: 0,
-              content: message,
-              channel_id: currentChannelId,
-              author: {
-                id: "1234",
-                username: "Bugsy",
-                discriminator: "0000",
-                avatar: null,
-                bot: false,
-              },
-              timestamp: new Date(),
-              state: "SENT"
-            };
-            MessageActions.receiveMessage(currentChannelId, customMessage);
+            const messages = document.querySelector(
+              'ol[role="list"][data-list-id="chat-messages"][aria-label^="Messages"]'
+            );
+
+            if (messages) {
+              const entry = `
+                <div data-author-id="1234">
+                    <div>
+                        <div><span>${message}</span></div>
+                    </div>
+                </div>
+              `
+
+              this.eventQueue.enqueue({ message: message, time: this.generateFakeSnowflake(), userId: update.user.id, guild: guildId });
+
+              const template = document.createElement('template');
+              template.innerHTML = entry.trim();
+              const entryNode = template.content.firstChild;
+
+              const lastItem = messages.lastElementChild;
+              if (lastItem) {
+                messages.insertBefore(entryNode, lastItem);
+              } else {
+                messages.appendChild(entryNode);
+              }
+            }
           }
         }
       }
     } catch (error) {
       console.error("An error occurred:", error);
     }
+  }
+
+  generateFakeSnowflake() {
+    const DISCORD_EPOCH = 1420070400000n;
+    const timestamp = BigInt(Date.now()) - DISCORD_EPOCH;
+    const workerId = 1n; 
+    const processId = 1n; 
+    const increment = BigInt(Math.floor(Math.random() * 4096)); 
+
+    const snowflake = (timestamp << 22n) | (workerId << 17n) | (processId << 12n) | increment;
+    return snowflake.toString();
   }
 
   debounce(func, wait) {
@@ -461,6 +577,9 @@ module.exports = class BasicPlugin {
 
     this.boundPresenceUpdate = this.onPresenceUpdate.bind(this);
     Dispatcher.subscribe("PRESENCE_UPDATES", this.boundPresenceUpdate);
+
+    this.boundChannelSelect = this.onChannelSelect.bind(this);
+    Dispatcher.subscribe("CHANNEL_SELECT", this.boundChannelSelect);
 
     const css = `
       [class*="chatContent"],
@@ -490,6 +609,9 @@ module.exports = class BasicPlugin {
 
       [class*="messageContent"] {
         color: #000000 !important;
+        font-size: 22px;
+        font-family: OriginalTahoma;
+        
       }
       div[role="list"][aria-label="Members"] {
         background-color: #ffffff !important;
@@ -510,8 +632,44 @@ module.exports = class BasicPlugin {
         color: #000080 !important;
         font-family: 'OriginalTahoma';
         letter-spacing: 0.3px;
-        font-size: 25px;
+        font-size: 22px;
       }
+
+      nav[aria-label="Private channels"] span[class^="nameContainer__"],
+      nav[aria-label="Private channels"] div[class^="name__"],
+      nav[aria-label="Private channels"] div[class^="username__"] {
+        all: unset !important;
+      }
+
+      h2[class*="defaultColor__"] {
+        color: white;
+      }
+
+      h1[class*="defaultColor__"] {
+        color: white;
+      }
+
+      h3 span[class*="timestamp"] {
+        display: none !important;
+      }
+
+      span[role="button"] {
+        margin-left: 20px !important;
+        letter-spacing: 0.3px;
+        font-size: 22px;
+        font-family: 'OriginalTahoma';
+        font-weight: normal !important;
+      }
+
+      span[role="button"]::after {
+        content: ':';
+        margin-left: 8px;
+      }
+
+      div[class*="text-"] {
+        color: #f1f0eb;
+      }
+
       span[class^="chipletContainerInner__"] {
         display: none !important;
       }
@@ -578,12 +736,10 @@ module.exports = class BasicPlugin {
         padding-bottom: 10px;
         padding-top: 10px;
         margin-top: 5px;
-        
       }
 
       div[class*="textAreaSlate__"] {
         background-color: #6699ff !important;
-        
       }
 
       div[class^="scrollableContainer__"][class*="themedBackground__"] {
@@ -634,7 +790,7 @@ module.exports = class BasicPlugin {
         background: #feffe6 !important;
       }
 
-      header[class^="header"] {
+      header[class^="header"]:not([class^="headerFull"]) {
         background-color: #4a659c;
       }
 
@@ -646,8 +802,12 @@ module.exports = class BasicPlugin {
         background: none;
       }
 
+      svg {
+        color: #6699ff !important;
+      }
+
       form svg {
-        color: #4a659c;
+        color: #4a659c !important;
         transition: color 0.3s;
       }
 
@@ -655,7 +815,7 @@ module.exports = class BasicPlugin {
         color: #6699ff;
       }
 
-      [class^="overflow_"] {
+      h3 > div[class^="overflow_"] {
         color: #000080;
         font-weight: bold;
       }
@@ -675,28 +835,13 @@ module.exports = class BasicPlugin {
         min-height: 20px !important;
       }
 
-      // div[data-author-id="1234"][class*="groupStart__"] {
-      //   padding-top: 15px !important;
-      // }
-
       div[data-author-id="1234"]::before {
         content: "▶";
         color: #808080;
         font-size: 10px;
         // padding-bottom: px;
         margin-right: 4px;
-      }
-
-      div[data-author-id="1234"] span[class*="headerText_"] {
-        display: none !important;
-      }
-
-      div[data-author-id="1234"] h3[class*="header_"] {
-        display: none !important;
-      }
-
-      div[data-author-id="1234"] [class*="avatar"] {
-        display: none !important;
+        margin-left: 85px;
       }
     `;
     this.styleElement = document.createElement('style');
@@ -724,6 +869,7 @@ module.exports = class BasicPlugin {
     );
 
     Dispatcher.unsubscribe("PRESENCE_UPDATES", this.boundPresenceUpdate);
+    Dispatcher.unsubscribe("CHANNEL_SELECT", this.boundChannelSelect);
 
     this.observer.disconnect();
 
