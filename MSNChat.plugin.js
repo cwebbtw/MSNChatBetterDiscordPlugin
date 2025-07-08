@@ -8,6 +8,7 @@ const MSN_CHAT_MEMBER_LIST_ID = 'msn-chat-member-list';
 const MSN_CHAT_MEMBER_COUNT_TEXT_ID = 'msn-chat-member-count-text';
 const MSN_CHAT_CHANNEL_HEADER_CONTAINER_ID = 'msn-chat-channel-header-container';
 const MSN_CHAT_CHANNEL_TEXT_ID = 'msn-chat-channel-text';
+const MSN_CHAT_USERNAME_HEADER_TEXT_ID = 'msn-chat-username-text';
 const MSN_CHAT_USERNAME_HEADER_ID = 'msn-chat-username-header';
 const MSN_CHAT_ROOT_STYLE = 'msn-chat-bg-style';
 
@@ -171,6 +172,7 @@ module.exports = class BasicPlugin {
 
       const memberCount                 = document.createElement('div');
       memberCount.id                    = MSN_CHAT_MEMBER_COUNT_TEXT_ID;
+      memberCount.style.color           = 'black';
       memberCount.style.textAlign       = 'left';
       memberCount.style.fontFamily      = 'Tahoma, sans-serif';
       memberCount.style.fontSize        = '14px';
@@ -200,13 +202,18 @@ module.exports = class BasicPlugin {
     const guildId = SelectedGuildStore?.getLastSelectedGuildId();
     const member = GuildMemberStore.getMember(guildId, userId);
 
+    const isIdle = this.userStatus[userId] === "idle";
+    const isOwner = member?.roles?.includes(this.guildRolesMap?.get("Owner"));
+    const isHost = member?.roles?.includes(this.guildRolesMap?.get("Host"))
+
     if (!document.getElementById(MSN_CHAT_USERNAME_HEADER_ID)) {
-      const box         = document.createElement('div');
-      box.id            = MSN_CHAT_USERNAME_HEADER_ID;
+      const box                                  = document.createElement('div');
+      box.id                                     = MSN_CHAT_USERNAME_HEADER_ID;
 
       memberList.parentElement.prepend(box);
 
       const usernameContainer                    = document.createElement('div');
+      usernameContainer.id                       = MSN_CHAT_USERNAME_HEADER_TEXT_ID;
 
       usernameContainer.style.textAlign          = 'left';
       usernameContainer.textContent              = this.getMyName();
@@ -233,7 +240,7 @@ module.exports = class BasicPlugin {
       z-index: 10;
     `;
 
-    if (this.userStatus[userId] === "idle") {
+    if (isIdle) {
       box.style.cssText += `
         background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-coffee.png');
         background-repeat: no-repeat;
@@ -241,14 +248,15 @@ module.exports = class BasicPlugin {
         background-size: 18px auto;
       `
     }
-    else if (member?.roles?.includes(this.guildRolesMap?.get("Owner"))) {
+    else if (isOwner) {
       box.style.cssText += `
         background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-owner.png');
         background-repeat: no-repeat;
         background-position: left 8px top 10px;
         background-size: 18px auto;
       `
-    } else if (member?.roles?.includes(this.guildRolesMap?.get("Host"))) {
+
+    } else if (isHost) {
       box.style.cssText += `
         background-image: url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-self-nicklist-host.png');
         background-repeat: no-repeat;
@@ -256,12 +264,18 @@ module.exports = class BasicPlugin {
         background-size: 18px auto;
       `
     }
+
+    if ((isHost || isOwner)) {
+      console.log();
+      const usernameContainer = box.firstChild;
+      if (!usernameContainer.textContent.includes('(Host)'))
+      {
+        usernameContainer.textContent += ' (Host)';
+      }
+    }
   }
 
   updateDocument() {
-
-    console.log('updating');
-
     var channelName = this.getChannelName();
 
     var memberList = document.querySelector('aside[class^="membersWrap_"] > * > div[aria-label="Members"]');
@@ -286,7 +300,9 @@ module.exports = class BasicPlugin {
 
         const idle = child.querySelector('div[aria-label$="Idle"]');
         if (idle) {
-          span.style.color = 'grey';
+          if (span) {
+            span.style.color = 'grey';
+          }
           child.style.backgroundImage     = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-coffee-cup.png')";
           child.style.backgroundRepeat    = 'no-repeat';
           child.style.backgroundPosition  = 'left 2px top 7px';
@@ -466,6 +482,10 @@ module.exports = class BasicPlugin {
       #channels {
         background-color: #f1f0eb;
         margin-bottom: 40px;
+      }
+
+      pre code {
+        color: grey !important;
       }
 
       [class*="messageContent"] {
