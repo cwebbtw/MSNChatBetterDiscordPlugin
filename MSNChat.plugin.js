@@ -1,7 +1,8 @@
 /**
  * @name MSN Chat Plugin
- * @version 0.0.1
+ * @version 1.0.0
  * @description A replica of MSN chat for Discord using BetterDiscord.
+ * @author Christopher Webb (cwebbtw)
  */
 
 const MSN_CHAT_MEMBER_LIST_ID = 'msn-chat-member-list';
