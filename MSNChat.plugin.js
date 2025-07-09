@@ -442,66 +442,72 @@ module.exports = class BasicPlugin {
     const RolesStore = BdApi.Webpack.getModule(m => m.getRole && m.getRoles);
 
     setTimeout(() => {
-      const messages = document.querySelector('ol[role="list"][data-list-id="chat-messages"][aria-label^="Messages"]');
-      const allEvents = this.eventQueue.getAll();
+      try {
+        const messages = document.querySelector('ol[role="list"][data-list-id="chat-messages"][aria-label^="Messages"]');
+        if (messages) {
+          const allEvents = this.eventQueue.getAll();
 
-      let i = allEvents.length - 1;
-      let j = messages.children.length - 1;
+          let i = allEvents.length - 1;
+          let j = messages.children.length - 1;
 
-      while (i >= 0) {
-        const event = allEvents[i];
-        
-        if (event.guild !== channelSelectEvent.guildId)  {
-          i--;
-          continue;
-        }
-
-        const member = GuildMemberStore.getMember(channelSelectEvent.guildId, event.userId);
-
-        if (!this.hasViewChannelPermission(RolesStore, member, guild, currentChannel)) {
-          i--;
-          continue;
-        }
-
-        while (j >= 0) {
-          const id = messages.children[j].id;
-          if (id) {
-            const parts = id.split('-');
-            if (parts.length === 4) {
-              const snowflake = parts[3];
-              const eventTime = BigInt(event.time);
-              const msgTime = BigInt(snowflake);
-
-              if (eventTime > msgTime) break;
+          while (i >= 0) {
+            const event = allEvents[i];
+            
+            if (event.guild !== channelSelectEvent.guildId)  {
+              i--;
+              continue;
             }
+
+            const member = GuildMemberStore.getMember(channelSelectEvent.guildId, event.userId);
+
+            if (!this.hasViewChannelPermission(RolesStore, member, guild, currentChannel)) {
+              i--;
+              continue;
+            }
+
+            while (j >= 0) {
+              const id = messages.children[j].id;
+              if (id) {
+                const parts = id.split('-');
+                if (parts.length === 4) {
+                  const snowflake = parts[3];
+                  const eventTime = BigInt(event.time);
+                  const msgTime = BigInt(snowflake);
+
+                  if (eventTime > msgTime) break;
+                }
+              }
+              j--;
+            }
+
+            const entry = `
+              <div data-author-id="1234">
+                <div>
+                  <div><span>${event.message}</span></div>
+                </div>
+              </div>
+            `;
+            const template = document.createElement('template');
+            template.innerHTML = entry.trim();
+            const entryNode = template.content.firstChild;
+
+            if (j >= 0) {
+              const refNode = messages.children[j].nextSibling;
+              messages.insertBefore(entryNode, refNode);
+            } else {
+              const lastItem = messages.lastElementChild;
+              if (lastItem) {
+                messages.insertBefore(entryNode, lastItem);
+              } else {
+                messages.appendChild(entryNode);
+              }
+            }
+
+            i--;
           }
-          j--;
         }
-
-        const entry = `
-          <div data-author-id="1234">
-            <div>
-              <div><span>${event.message}</span></div>
-            </div>
-          </div>
-        `;
-        const template = document.createElement('template');
-        template.innerHTML = entry.trim();
-        const entryNode = template.content.firstChild;
-
-        if (j >= 0) {
-          const refNode = messages.children[j].nextSibling;
-          messages.insertBefore(entryNode, refNode);
-        } else {
-          const lastItem = messages.lastElementChild;
-          if (lastItem) {
-            messages.insertBefore(entryNode, lastItem);
-          } else {
-            messages.appendChild(entryNode);
-          }
-        }
-
-        i--;
+      } catch(error) {
+        console.error("An error occurred:", error);
       }
     }, 200);
   }
@@ -686,12 +692,16 @@ module.exports = class BasicPlugin {
         all: unset !important;
       }
 
-      h2[class*="defaultColor__"] {
-        color: white;
+      [class*="defaultColor__"] {
+        color: #6699ff !important;
       }
 
-      h1[class*="defaultColor__"] {
-        color: white;
+      h2[class*="defaultColor__"] {
+        color: white !important;
+      }
+
+      div[class*="defaultColor__"] {
+        color: #6699ff !important;
       }
 
       // h3 span[class*="timestamp"] {
@@ -717,6 +727,7 @@ module.exports = class BasicPlugin {
 
       div[id^="message-reply-context-"] {
         padding-top: 15px;
+        margin-left: -38px !important;
       }
 
       div[class*="isFailed_"]::after {
@@ -752,8 +763,8 @@ module.exports = class BasicPlugin {
         margin-left: 6px;
       }
 
-      div[class*="text-"] {
-        color: #f1f0eb;
+      [class*="text-"] {
+        color: #6699ff !important;
       }
 
       span[class^="chipletContainerInner__"] {
@@ -880,7 +891,7 @@ module.exports = class BasicPlugin {
         color: #6699ff !important;
       }
 
-      header[class^="header"]:not([class^="headerFull"]) {
+      nav > div > header[class^="header"]:not([class^="headerFull"]) {
         background-color: #4a659c;
       }
 
