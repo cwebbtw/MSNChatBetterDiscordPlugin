@@ -285,7 +285,6 @@ module.exports = class BasicPlugin {
     }
 
     if ((isHost || isOwner)) {
-      console.log();
       const usernameContainer = box.firstChild;
       if (!usernameContainer.textContent.includes('(Host)'))
       {
@@ -295,6 +294,10 @@ module.exports = class BasicPlugin {
   }
 
   updateDocument() {
+    const SelectedGuildStore = BdApi.Webpack.getModule(m => m.getLastSelectedGuildId);
+    const GuildMemberStore = BdApi.Webpack.getModule(m => m.getMember && m.getMembers);
+    const guildId = SelectedGuildStore?.getLastSelectedGuildId();
+
     var channelName = this.getChannelName();
 
     var memberList = document.querySelector('aside[class^="membersWrap_"] > * > div[aria-label="Members"]');
@@ -303,6 +306,47 @@ module.exports = class BasicPlugin {
     var header;
 
     const myName = this.getMyName();
+
+    const allMessages = document.querySelectorAll('h3[class^="header"][aria-labelledby^="message-username-"]');
+
+
+    if (allMessages) {
+      const admin = this.guildRolesMap?.get("Admin");
+      const sysop = this.guildRolesMap?.get("Sysop");
+      const guide = this.guildRolesMap?.get("Guide");
+      const owner = this.guildRolesMap?.get("Owner");
+      const host  = this.guildRolesMap?.get("Host");
+
+      for (const child of Array.from(allMessages).reverse()) {
+
+        const usernameSpan = child.querySelector(`[data-text]`);
+        if (!usernameSpan) continue;
+
+        const id = child?.parentElement?.parentElement?.getAttribute('data-author-id');
+        if (!id) continue;
+
+        const member = GuildMemberStore.getMember(guildId, id);
+        if (!member?.roles) continue;
+
+        const roles = member.roles;
+        const target = usernameSpan.parentElement;
+
+        if (roles.includes(owner)) {
+          target.style.backgroundImage = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-owner.png')";
+        } else if (roles.includes(host)) {
+          target.style.backgroundImage = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-host.png')";
+        } else if (roles.includes(admin) || roles.includes(sysop) || roles.includes(guide)) {
+          target.style.backgroundImage = "url('https://raw.githubusercontent.com/cwebbtw/MSNChatBetterDiscordPlugin/refs/heads/main/msn-nicklist-butterfly.png')";
+        } else {
+          continue;
+        }
+
+        target.style.backgroundRepeat   = 'no-repeat';
+        target.style.backgroundPosition = 'left 6px top 2px';
+        target.style.backgroundSize     = '16px auto';
+      }
+    }
+
 
     for (const child of memberList.children) {
       if (child.tagName.toLowerCase() === 'h3') {
@@ -558,14 +602,6 @@ module.exports = class BasicPlugin {
     return snowflake.toString();
   }
 
-  debounce(func, wait) {
-    let timeout;
-    return function(...args) {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-  }
-
   start() {
     // TODO: Temporary hack to populate user status
     this.getOnlineCount();
@@ -620,6 +656,14 @@ module.exports = class BasicPlugin {
         height: 0px !important;
       }
 
+      div[class*="message__"]:hover {
+        background-color: white !important;
+      }
+
+      div[class*="message__"] {
+        background-color: white !important;
+      }
+
       div[class*="message"] span[class*="username"] {
         color: #000080 !important;
       }
@@ -649,21 +693,62 @@ module.exports = class BasicPlugin {
         color: white;
       }
 
-      h3 span[class*="timestamp"] {
-        display: none !important;
+      // h3 span[class*="timestamp"] {
+      //   display: none !important;
+      // }
+
+      div[class^="repliedMessageClickableSpine_"] {
+        display: none;
       }
 
-      span[role="button"] {
-        margin-left: 20px !important;
-        letter-spacing: 0.3px;
+      h3 span[class*="timestamp"] {
+        opacity: 0;
+        font-size: 8px !important;
+        pointer-events: none;
+        margin-left: -28px;
+      }
+
+      h3:hover span[class*="timestamp"] {
+        opacity: 1;
+        font-size: 8px !important;
+        margin-left: -28px;
+      }
+
+      div[id^="message-reply-context-"] {
+        padding-top: 15px;
+      }
+
+      div[class*="isFailed_"]::after {
+        color: #ff0000C0 !important;
+        content: '(failed to send)' !important;
+        padding-left: 10px;
+      }
+
+      div[class^="reactions_"] {
+        padding-bottom: 15px;
+      }
+
+      div[data-is-self="true"] span[class^="username_"]:not([class*="name__"]):not([class^="mention"]):not([tabindex="-1"]):not([tabindex="-1"]):not([aria-label]):not([data-text^="@"]) {
+        margin-left: 26px !important;
+        font-size: 14px;
+        font-family: 'Tahoma';
+        font-weight: bold !important;
+        color: black !important;
+        text-decoration: none !important;
+      }
+
+      span[class^="username_"]:not([class*="name__"]):not([class^="mention"]):not([tabindex="-1"]):not([tabindex="-1"]):not([aria-label]):not([data-text^="@"]) {
+        margin-left: 26px !important;
         font-size: 22px;
         font-family: 'OriginalTahoma';
         font-weight: normal !important;
+        text-decoration: none !important;
       }
 
-      span[role="button"]::after {
+      span[class^="username_"]:not([class*="name__"]):not([class^="mention"]):not([tabindex="-1"]):not([aria-label]):not([data-text^="@"])::after {
         content: ':';
-        margin-left: 8px;
+        font-weight: 100 !important;
+        margin-left: 6px;
       }
 
       div[class*="text-"] {
@@ -790,6 +875,10 @@ module.exports = class BasicPlugin {
         background: #feffe6 !important;
       }
 
+      a {
+        color: #6699ff !important;
+      }
+
       header[class^="header"]:not([class^="headerFull"]) {
         background-color: #4a659c;
       }
@@ -841,7 +930,7 @@ module.exports = class BasicPlugin {
         font-size: 10px;
         // padding-bottom: px;
         margin-right: 4px;
-        margin-left: 85px;
+        margin-left: 65px;
       }
     `;
     this.styleElement = document.createElement('style');
@@ -849,9 +938,31 @@ module.exports = class BasicPlugin {
     this.styleElement.textContent = css;
     document.head.appendChild(this.styleElement);
 
-    this.updateDocument();
     this.observer = new MutationObserver(
-      this.debounce(() => this.updateDocument(), 100)
+      (mutations) => {
+        let raiseEvent = false;
+
+        mutations.forEach(element => {
+          // The below is used for diagnostics - keep it for now
+          // due to the optimisation to only watch specific parts of
+          // the DOM updating
+          
+          // console.log(element?.target?.classList);
+
+          if ([...element?.target?.classList || []].some(cls => 
+            cls.startsWith("scroller") ||
+            cls.startsWith("content_")
+          )) {
+            raiseEvent = true;
+          }
+        });
+
+        if (raiseEvent) {
+          // console.log('mutating');
+          // console.log(mutations);
+          this.updateDocument();
+        }
+      }
     );
     const appMount = document.getElementById('app-mount');
     if (appMount) {
