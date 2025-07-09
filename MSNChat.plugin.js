@@ -930,7 +930,7 @@ module.exports = class BasicPlugin {
         font-size: 10px;
         // padding-bottom: px;
         margin-right: 4px;
-        margin-left: 65px;
+        margin-left: 85px;
       }
     `;
     this.styleElement = document.createElement('style');
@@ -946,7 +946,7 @@ module.exports = class BasicPlugin {
           // The below is used for diagnostics - keep it for now
           // due to the optimisation to only watch specific parts of
           // the DOM updating
-          
+
           // console.log(element?.target?.classList);
 
           if ([...element?.target?.classList || []].some(cls => 
