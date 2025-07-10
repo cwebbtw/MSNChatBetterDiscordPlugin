@@ -17,3 +17,5 @@ BetterDiscord plugins can be dangerous as the author has access to the Node runt
 Navigate to **Plugins** under the BetterDiscord settings and ensure the plugin is enabled:
 
 ![image](https://github.com/user-attachments/assets/8f742f06-2d8c-4c1d-82fd-6138b4764a09)
+
+Additionally change the chat messages to be 'compact'
